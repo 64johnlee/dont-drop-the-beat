@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+  <link rel="icon" href="data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'><text%20y='.9em'%20font-size='90'>🎧</text></svg>" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Don't Drop the Beat</title>
 <style>
@@ -80,7 +81,7 @@
     ov.innerHTML=`<h1>BEAT DROPPED 🎧</h1><p>Score: <b>${score}</b><br>Best: ${best}</p>
       <button id="again">▶ PLAY AGAIN</button><button id="sh" class="ghost">🏆 Beat my score</button>`;
     document.getElementById('again').onclick=begin;
-    document.getElementById('sh').onclick=async()=>{ const t=`I scored ${score} on Don't Drop the Beat 🎧 — beat me!`;
+    document.getElementById('sh').onclick=async()=>{ const t=`I scored ${score} on Don't Drop the Beat 🎧 — bet you can't beat it`;
       if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}} try{await navigator.clipboard.writeText(t);}catch(e){} };
   }
   function begin(){ ov.classList.add('hidden'); hud.classList.remove('hidden'); ctrl.classList.remove('hidden');
