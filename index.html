@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Don't Drop the Beat</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0; user-select:none; }
+  html,body { height:100%; overflow:hidden; }
+  body { font-family:"Arial Black",system-ui,sans-serif; background:#0a0420; color:#fff; touch-action:none; }
+  #c { position:fixed; inset:0; display:block; }
+  .hud { position:fixed; top:10px; left:0; right:0; text-align:center; font-size:18px;
+    text-shadow:0 0 10px #ff3df0; pointer-events:none; }
+  .ctrl { position:fixed; bottom:0; left:0; right:0; height:120px; display:flex; }
+  .ctrl div { flex:1; display:flex; align-items:center; justify-content:center; font-size:46px;
+    color:rgba(255,255,255,.5); }
+  .L { background:linear-gradient(90deg,rgba(22,242,200,.18),transparent); }
+  .R { background:linear-gradient(-90deg,rgba(255,61,240,.18),transparent); }
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; background:rgba(8,3,24,.82); text-align:center; padding:24px; }
+  .overlay h1 { font-size:30px; text-shadow:0 0 16px #16f2c8,0 0 30px #ff3df0; }
+  .overlay p { color:#bdeaff; font-size:15px; }
+  button { font-family:inherit; font-weight:900; font-size:18px; padding:15px 26px; border:none;
+    border-radius:14px; color:#04110d; background:linear-gradient(90deg,#16f2c8,#ff3df0); cursor:pointer; }
+  .ghost { background:transparent; color:#16f2c8; border:2px solid #16f2c8; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hud hidden" id="hud"></div>
+  <div class="ctrl hidden" id="ctrl"><div class="L" id="bl">◀</div><div class="R" id="br">▶</div></div>
+  <div class="overlay" id="ov">
+    <h1>DON'T DROP THE BEAT</h1>
+    <p>Catch the falling notes. Tilt your phone or use ◀ ▶.<br>3 misses and it's over.</p>
+    <button id="start">▶ START</button>
+    <button id="tilt" class="ghost">Enable Tilt (optional)</button>
+  </div>
+<script>
+(() => {
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  const hud=document.getElementById('hud'), ctrl=document.getElementById('ctrl'), ov=document.getElementById('ov');
+  let W,H; function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight;} resize(); addEventListener('resize',resize);
+  // velocities are per-SECOND (delta-time based) so it runs the same on 60Hz, 120Hz, or unthrottled.
+  let px, notes, score, combo, lives, spawnMs, spawnEvery, running=false, dir=0, tiltX=0, shake=0, flash=0,
+      best=+(localStorage.beatBest||0), lastTs=0;
+  const PAD_W=86, PAD_H=16, DIR_SPEED=470, TILT_SPEED=560;
+  function reset(){ px=W/2; notes=[]; score=0; combo=0; lives=3; spawnMs=0; spawnEvery=900; running=true; lastTs=0; }
+  function spawn(){ notes.push({x:30+Math.random()*(W-60), y:-20, v:140+score*0.08, r:14, hue:Math.random()*360}); }
+  function loop(ts){
+    if(!running) return;
+    if(!lastTs) lastTs=ts;
+    let dt=(ts-lastTs)/1000; lastTs=ts; if(dt>0.05) dt=0.05;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='rgba(10,4,32,.35)'; ctx.fillRect(0,0,W,H);
+    shake*=Math.pow(0.85, dt*60); flash*=Math.pow(0.8, dt*60);
+    const sx=(Math.random()-0.5)*shake, sy=(Math.random()-0.5)*shake;
+    ctx.save(); ctx.translate(sx,sy);
+    const vx = tiltX!==0 ? tiltX*TILT_SPEED : dir*DIR_SPEED;
+    px = Math.max(PAD_W/2, Math.min(W-PAD_W/2, px + vx*dt));
+    const py=H-150;
+    spawnMs+=dt*1000; if(spawnMs>spawnEvery){spawnMs=0; spawn(); spawnEvery=Math.max(360,900-score*0.6);}
+    for(let k=notes.length-1;k>=0;k--){ const n=notes[k]; n.y+=n.v*dt;
+      ctx.beginPath(); ctx.fillStyle=`hsl(${n.hue},100%,65%)`; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=18;
+      ctx.arc(n.x,n.y,n.r,0,7); ctx.fill(); ctx.shadowBlur=0;
+      if(n.y>py-PAD_H && n.y<py+PAD_H && Math.abs(n.x-px)<PAD_W/2+n.r){
+        notes.splice(k,1); combo++; score+=10*Math.max(1,combo); shake=10; flash=1;
+      } else if(n.y>H){ notes.splice(k,1); combo=0; lives--; shake=16; if(lives<=0){ ctx.restore(); return gameOver(); } }
+    }
+    ctx.fillStyle=`hsl(${(ts/8)%360},100%,60%)`; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=20;
+    ctx.fillRect(px-PAD_W/2, py-PAD_H/2, PAD_W, PAD_H); ctx.shadowBlur=0;
+    ctx.restore();
+    if(flash>0){ ctx.fillStyle=`rgba(255,255,255,${flash*0.25})`; ctx.fillRect(0,0,W,H); }
+    hud.textContent=`SCORE ${score}   x${Math.max(1,combo)}   ${'❤️'.repeat(lives)}`;
+    requestAnimationFrame(loop);
+  }
+  function gameOver(){
+    running=false; if(score>best){best=score; localStorage.beatBest=best;}
+    hud.classList.add('hidden'); ctrl.classList.add('hidden'); ov.classList.remove('hidden');
+    ov.innerHTML=`<h1>BEAT DROPPED 🎧</h1><p>Score: <b>${score}</b><br>Best: ${best}</p>
+      <button id="again">▶ PLAY AGAIN</button><button id="sh" class="ghost">🏆 Beat my score</button>`;
+    document.getElementById('again').onclick=begin;
+    document.getElementById('sh').onclick=async()=>{ const t=`I scored ${score} on Don't Drop the Beat 🎧 — beat me!`;
+      if(navigator.share){try{await navigator.share({text:t});return;}catch(e){}} try{await navigator.clipboard.writeText(t);}catch(e){} };
+  }
+  function begin(){ ov.classList.add('hidden'); hud.classList.remove('hidden'); ctrl.classList.remove('hidden');
+    reset(); requestAnimationFrame(loop); }
+  document.getElementById('start').onclick=begin;
+  function onTilt(e){ if(e.gamma!=null) tiltX=Math.max(-4,Math.min(4,e.gamma/12)); }
+  document.getElementById('tilt').onclick=async()=>{
+    try{ if(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission){
+      const p=await DeviceOrientationEvent.requestPermission(); if(p==='granted') addEventListener('deviceorientation',onTilt);
+    } else { addEventListener('deviceorientation',onTilt); } }catch(e){}
+  };
+  const bl=document.getElementById('bl'), br=document.getElementById('br');
+  const set=(d)=>()=>dir=d, clr=()=>dir=0;
+  bl.addEventListener('pointerdown',set(-1)); br.addEventListener('pointerdown',set(1));
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>{bl.addEventListener(ev,clr);br.addEventListener(ev,clr);});
+  addEventListener('keydown',e=>{if(e.key==='ArrowLeft')dir=-1;if(e.key==='ArrowRight')dir=1;});
+  addEventListener('keyup',()=>dir=0);
+})();
+</script>
+</body>
+</html>
